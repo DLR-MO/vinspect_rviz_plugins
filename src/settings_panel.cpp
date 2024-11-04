@@ -44,11 +44,11 @@ SettingsPanel::SettingsPanel(QWidget * parent)
   connect(transparency_slider_, SIGNAL(valueChanged(int)), this, SLOT(onTransparencyChange(int)));
 
   // horizontal divider line
-  QWidget * horizontalLineWidget = new QWidget;
-  horizontalLineWidget->setFixedHeight(2);
-  horizontalLineWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-  horizontalLineWidget->setStyleSheet(QString("background-color: #c0c0c0;"));
-  sparse_layout->addWidget(horizontalLineWidget);
+  QWidget * horizontal_line_widget_1 = new QWidget;
+  horizontal_line_widget_1->setFixedHeight(2);
+  horizontal_line_widget_1->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  horizontal_line_widget_1->setStyleSheet(QString("background-color: #c0c0c0;"));
+  sparse_layout->addWidget(horizontal_line_widget_1);
 
   // dot size
   sparse_layout->addWidget(new QLabel("Dot radius:"));
@@ -104,11 +104,11 @@ SettingsPanel::SettingsPanel(QWidget * parent)
   sparse_layout->addWidget(new QLabel("Note: Remeshing might take a while"));
 
   // horizontal divider line
-  QWidget * horizontalLineWidget2 = new QWidget;
-  horizontalLineWidget2->setFixedHeight(2);
-  horizontalLineWidget2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-  horizontalLineWidget2->setStyleSheet(QString("background-color: #c0c0c0;"));
-  sparse_layout->addWidget(horizontalLineWidget2);
+  QWidget * horizontal_line_widget_2 = new QWidget;
+  horizontal_line_widget_2->setFixedHeight(2);
+  horizontal_line_widget_2->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  horizontal_line_widget_2->setStyleSheet(QString("background-color: #c0c0c0;"));
+  sparse_layout->addWidget(horizontal_line_widget_2);
 
   // horizontal layout for buttons
   QHBoxLayout * hlayout = new QHBoxLayout(this);
@@ -160,34 +160,43 @@ SettingsPanel::SettingsPanel(QWidget * parent)
     clear_button, &QPushButton::clicked, [this, input_objects] {clearClick(input_objects);});
   dense_layout->addWidget(clear_button, 6, 1);
 
-  QWidget * horizontalLineWidget3 = new QWidget;
-  horizontalLineWidget3->setFixedHeight(2);
-  horizontalLineWidget3->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-  horizontalLineWidget3->setStyleSheet(QString("background-color: #c0c0c0;"));
-  dense_layout->addWidget(horizontalLineWidget3, 9, 0, 1, 2);
+  QWidget * horizontal_line_widget_3 = new QWidget;
+  horizontal_line_widget_3->setFixedHeight(2);
+  horizontal_line_widget_3->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  horizontal_line_widget_3->setStyleSheet(QString("background-color: #c0c0c0;"));
+  dense_layout->addWidget(horizontal_line_widget_3, 9, 0, 1, 2);
 
   QPushButton * service_stop_button = new QPushButton("Send stop request");
   connect(service_stop_button, &QPushButton::clicked, [this] {requestStopClick();});
   dense_layout->addWidget(service_stop_button, 12, 0, 1, 2);
 
-  QWidget * horizontalLineWidget4 = new QWidget;
-  horizontalLineWidget4->setFixedHeight(2);
-  horizontalLineWidget4->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-  horizontalLineWidget4->setStyleSheet(QString("background-color: #c0c0c0;"));
-  dense_layout->addWidget(horizontalLineWidget4, 13, 0, 1, 2);
+  QWidget * horizontal_line_widget_4 = new QWidget;
+  horizontal_line_widget_4->setFixedHeight(2);
+  horizontal_line_widget_4->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  horizontal_line_widget_4->setStyleSheet(QString("background-color: #c0c0c0;"));
+  dense_layout->addWidget(horizontal_line_widget_4, 13, 0, 1, 2);
 
   QPushButton * dense_req_button = new QPushButton("Get dense data at pose");
-  connect(dense_req_button, &QPushButton::clicked, [this] {dense_req_Click();});
+  connect(dense_req_button, &QPushButton::clicked, [this] {denseReqClick();});
   dense_layout->addWidget(dense_req_button, 15, 0, 1, 2);
 
+  QPushButton * dense_available_poses_button = new QPushButton("Show available dense poses");
+  connect(dense_available_poses_button, &QPushButton::clicked, [this] {denseAvailablePosesClick();});
+  dense_layout->addWidget(dense_available_poses_button, 16, 0);
+
+  multi_pose_percentage = new QLineEdit("");
+  multi_pose_percentage->setToolTip("Enter an intger from 0 between 100");
+  multi_pose_percentage->setText("50");
+  dense_layout->addWidget(multi_pose_percentage, 16, 1);
+
   // make tab layout of sparse and dense
-  QTabWidget * tabWidget = new QTabWidget(this);
+  QTabWidget * tab_widget = new QTabWidget(this);
   auto sparse_widget = new QWidget;
   auto dense_widget = new QWidget;
   sparse_widget->setLayout(sparse_layout);
   dense_widget->setLayout(dense_layout);
-  tabWidget->addTab(sparse_widget, "Sparse Data");
-  tabWidget->addTab(dense_widget, "Dense Data");
+  tab_widget->addTab(sparse_widget, "Sparse Data");
+  tab_widget->addTab(dense_widget, "Dense Data");
 }
 
 void SettingsPanel::save(const rviz_common::Config conf) const {rviz_common::Panel::save(conf);}
@@ -208,6 +217,8 @@ void SettingsPanel::onInitialize()
     plugin_node_->create_client<std_srvs::srv::Empty>("/vinspect/stop_reconstruction");
   dense_req_publisher_ = plugin_node_->create_publisher<std_msgs::msg::String>(
     "vinspect/dense_data_req", latching_qos);
+  dense_available_poses_publisher_ = plugin_node_->create_publisher<std_msgs::msg::Int32>(
+    "vinspect/multi_dense_data_req", latching_qos);
 }
 
 
@@ -355,11 +366,30 @@ void SettingsPanel::clearClick(const std::reference_wrapper<QLineEdit *> input_o
   }
 }
 
-void SettingsPanel::dense_req_Click()
+void SettingsPanel::denseReqClick()
 {
   auto message = std_msgs::msg::String();
   message.data = "request";
   dense_req_publisher_->publish(message);
+}
+
+void SettingsPanel::denseAvailablePosesClick()
+{
+  /*
+  Potential ToDo:
+  Create new ROS msg with more options like percentage of poses to show, color, heatmap etc. 
+  */
+  auto message = std_msgs::msg::Int32();
+  int percentage = multi_pose_percentage->text().toInt();
+  if (percentage > 0 && percentage <= 100)
+  {
+    message.data = percentage;
+    dense_available_poses_publisher_->publish(message);
+  }
+  else
+  {
+    RCLCPP_ERROR(plugin_node_->get_logger(), "Multiple pose request value not > 0 and >= 100");
+  }
 }
 
 SettingsPanel::~SettingsPanel()
